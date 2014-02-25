@@ -20,6 +20,8 @@ namespace NFCTalk
     {
         private NFCTalk.DataContext _dataContext = NFCTalk.DataContext.Singleton;
 
+        public static bool PhotoActivity { get; set; }
+
         /// <summary>
         /// Provides easy access to the root frame of the Phone Application.
         /// </summary>
@@ -108,7 +110,10 @@ namespace NFCTalk
         // This code will not execute when the application is closing
         private void Application_Deactivated(object sender, DeactivatedEventArgs e)
         {
-            _dataContext.Communication.Stop();
+            if (!App.PhotoActivity)
+            {
+                _dataContext.Communication.Stop();
+            }
             _dataContext.Save();
         }
 

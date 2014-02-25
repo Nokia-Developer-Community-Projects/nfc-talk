@@ -50,6 +50,7 @@
                                         <StackPanel Background="#3366FF" MinWidth="160" MaxWidth="420" Margin="0,0,0,18" HorizontalAlignment="Left">
                                             <TextBlock Text="{Binding Name}" Margin="12,12,12,0" Style="{StaticResource PhoneTextSmallStyle}" Foreground="White"/>
                                             <TextBlock Text="{Binding Text}" Margin="12,6,12,12" Style="{StaticResource PhoneTextNormalStyle}" TextWrapping="Wrap" Foreground="White"/>
+                                            <Image Source="{Binding Image}" CacheMode="BitmapCache" Visibility="{Binding ShowImage}" Margin="12,6,12,12" Width="100" Height="100" />
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -60,6 +61,7 @@
                                         <StackPanel Background="#0033CC" MinWidth="160" MaxWidth="420" Margin="0,0,0,18" HorizontalAlignment="Right">
                                             <TextBlock Text="{Binding Name}" Margin="12,12,12,0" Style="{StaticResource PhoneTextSmallStyle}" HorizontalAlignment="Right" Foreground="White"/>
                                             <TextBlock Text="{Binding Text}" Margin="12,6,12,12" Style="{StaticResource PhoneTextNormalStyle}" TextWrapping="Wrap" HorizontalAlignment="Right" Foreground="White"/>
+                                            <Image Source="{Binding Image}" CacheMode="BitmapCache" Visibility="{Binding ShowImage}" Margin="12,6,12,12" Width="100" Height="100" />
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -70,6 +72,7 @@
                                         <StackPanel Background="#828282" MinWidth="160" MaxWidth="420" Margin="0,0,0,18" HorizontalAlignment="Left">
                                             <TextBlock Text="{Binding Name}" Margin="12,12,12,0" Style="{StaticResource PhoneTextSmallStyle}" Foreground="White"/>
                                             <TextBlock Text="{Binding Text}" Margin="12,6,12,12" Style="{StaticResource PhoneTextNormalStyle}" TextWrapping="Wrap" Foreground="White"/>
+                                            <Image Source="{Binding Image}" CacheMode="BitmapCache" Visibility="{Binding ShowImage}" Margin="12,6,12,12" Width="100" Height="100" />
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -80,6 +83,7 @@
                                         <StackPanel Background="#474747" MinWidth="160" MaxWidth="420" Margin="0,0,0,18" HorizontalAlignment="Right">
                                             <TextBlock Text="{Binding Name}" Margin="12,12,12,0" Style="{StaticResource PhoneTextSmallStyle}" HorizontalAlignment="Right" Foreground="White"/>
                                             <TextBlock Text="{Binding Text}" Margin="12,6,12,12" Style="{StaticResource PhoneTextNormalStyle}" TextWrapping="Wrap" HorizontalAlignment="Right" Foreground="White"/>
+                                            <Image Source="{Binding Image}" CacheMode="BitmapCache" Visibility="{Binding ShowImage}" Margin="12,6,12,12" Width="100" Height="100" />
                                         </StackPanel>
                                     </StackPanel>
                                 </DataTemplate>
@@ -88,10 +92,15 @@
                     </DataTemplate>
                 </ListBox.ItemTemplate>
             </ListBox>
-            
-            <StackPanel Grid.Row="1" Orientation="Horizontal" >
-                <TextBox x:Name="messageInput" Width="357" InputScope="Chat" TextChanged="messageInput_TextChanged"/>
-                <Button x:Name="sendButton" Width="100" Content="say" Click="sendButton_Click"/>
+
+            <StackPanel Grid.Row="1">
+                <StackPanel Grid.Row="1" Orientation="Horizontal" >
+                    <TextBox x:Name="messageInput" Width="456" InputScope="Chat" TextChanged="messageInput_TextChanged"/>
+                    <!--<Button x:Name="sendButton" Width="100" Content="say" Click="sendButton_Click"/>-->
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Center" >
+                    <Image x:Name="messageImage" Height="150" Visibility="Collapsed" />
+                </StackPanel>
             </StackPanel>
         </Grid>
     </Grid>

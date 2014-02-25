@@ -14,6 +14,9 @@ using System.Windows;
 using Windows.Networking.Proximity;
 using Windows.Networking.Sockets;
 using Windows.Storage.Streams;
+using ProtoBuf;
+using System.IO;
+using System.Runtime.InteropServices.WindowsRuntime;
 
 namespace NFCTalk
 {
@@ -159,9 +162,10 @@ namespace NFCTalk
 
                 PeerFinder.Start();
             }
-            else
+            else if (_status != ConnectionStatusValue.Connected)
             {
-                throw new Exception("Bad state, please stop first");
+                //throw new Exception(string.Concat("Bad state, please stop first - _status >>> ", _status));
+                this.Stop();
             }
         }
 
@@ -255,6 +259,33 @@ namespace NFCTalk
             else
             {
                 throw new Exception("Bad state, please start first");
+            }
+        }
+
+        private byte[] ConvertMessageToByteArray(Message msg)
+        {
+            if (msg == null)
+            {
+                return null;
+            }
+
+            using (MemoryStream ms = new MemoryStream())
+            {
+                Serializer.Serialize<Message>(ms, msg);
+                return ms.ToArray();
+            }
+        }
+
+        private Message ConvertByteArrayToMessage(byte[] msg)
+        {
+            if (msg == null)
+            {
+                return null;
+            }
+
+            using (MemoryStream ms = new MemoryStream(msg))
+            {
+                return Serializer.Deserialize<Message>(ms);
             }
         }
 
@@ -474,14 +505,18 @@ namespace NFCTalk
         {
             try
             {
-                if (m.Text.Length > 0)
+                //if (m.Text.Length > 0)
+                if (m != null)
                 {
                     _writer.WriteUInt32(0); // protocol version
                     _writer.WriteUInt32(1); // operation identifier
 
-                    uint length = _writer.MeasureString(m.Text);
-                    _writer.WriteUInt32(length);
-                    _writer.WriteString(m.Text);
+                    //uint length = _writer.MeasureString(m.Text);
+                    //_writer.WriteUInt32(length);
+                    //_writer.WriteString(m.Text);
+                    IBuffer buf = ConvertMessageToByteArray(m).AsBuffer();
+                    _writer.WriteUInt32(buf.Length);
+                    _writer.WriteBuffer(buf);
 
                     await _writer.StoreAsync();
                 }
@@ -555,14 +590,16 @@ namespace NFCTalk
                                     uint length = _reader.ReadUInt32();
 
                                     await GuaranteedLoadAsync(length);
-                                    string text = _reader.ReadString(length);
+                                    //string text = _reader.ReadString(length);
 
-                                    Message m = new Message()
-                                    {
-                                        Name = PeerName,
-                                        Text = text,
-                                        Direction = Message.DirectionValue.In
-                                    };
+                                    //Message m = new Message()
+                                    //{
+                                    //    Name = PeerName,
+                                    //    Text = text,
+                                    //    Direction = Message.DirectionValue.In
+                                    //};
+                                    Message m = ConvertByteArrayToMessage(_reader.ReadBuffer(length).ToArray());
+                                    m.Direction = Message.DirectionValue.In;
 
                                     if (MessageReceived != null)
                                     {

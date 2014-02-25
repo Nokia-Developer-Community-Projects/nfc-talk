@@ -7,9 +7,14 @@
  */
 
 using Microsoft.Phone.Controls;
+using Microsoft.Phone.Shell;
+using Microsoft.Phone.Tasks;
 using System;
+using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Media.Imaging;
+using Windows.Storage;
 
 namespace NFCTalk
 {
@@ -20,6 +25,10 @@ namespace NFCTalk
     public partial class TalkPage : PhoneApplicationPage
     {
         private NFCTalk.DataContext _dataContext = NFCTalk.DataContext.Singleton;
+        private ApplicationBarIconButton sendButton = new ApplicationBarIconButton();
+        private PhotoChooserTask m_PhotoChooserTask = new PhotoChooserTask();
+        private string m_TempImageName = "tempImage.jpg";
+        private bool m_ImageReadyToTransfer = false;
 
         void scrollToLast()
         {
@@ -34,7 +43,26 @@ namespace NFCTalk
         {
             InitializeComponent();
 
+            m_PhotoChooserTask.Completed += PhotoChooserTask_Completed;
+            BuildApplicationBar();
+
             DataContext = _dataContext;
+        }
+
+        private void BuildApplicationBar()
+        {
+            // Set the page's ApplicationBar to a new instance of ApplicationBar.
+            ApplicationBar = new ApplicationBar();
+
+            sendButton = new ApplicationBarIconButton(new Uri("/Assets/Icons/appbar.message.send.png", UriKind.Relative));
+            sendButton.Text = "Send";
+            sendButton.Click += sendButton_Click;
+            ApplicationBar.Buttons.Add(sendButton);
+
+            ApplicationBarIconButton addImageButton = new ApplicationBarIconButton(new Uri("/Assets/Icons/appbar.image.png", UriKind.Relative));
+            addImageButton.Text = "Add Image";
+            addImageButton.Click += addImageButton_Click;
+            ApplicationBar.Buttons.Add(addImageButton);
         }
 
         /// <summary>
@@ -46,23 +74,26 @@ namespace NFCTalk
         {
             base.OnNavigatedTo(e);
 
-            if (_dataContext.Communication.IsConnected)
+            if (!App.PhotoActivity)
             {
-                sendButton.IsEnabled = false;
-
-                _dataContext.Communication.ConnectionInterrupted += ConnectionInterrupted;
-                _dataContext.Communication.MessageReceived += MessageReceived;
-
-                _dataContext.Messages.CollectionChanged += MessagesChanged;
-
-                Deployment.Current.Dispatcher.BeginInvoke(() =>
+                if (_dataContext.Communication.IsConnected)
                 {
-                    scrollToLast();
-                });
-            }
-            else
-            {
-                NavigationService.GoBack();
+                    sendButton.IsEnabled = false;
+
+                    _dataContext.Communication.ConnectionInterrupted += ConnectionInterrupted;
+                    _dataContext.Communication.MessageReceived += MessageReceived;
+
+                    _dataContext.Messages.CollectionChanged += MessagesChanged;
+
+                    Deployment.Current.Dispatcher.BeginInvoke(() =>
+                    {
+                        scrollToLast();
+                    });
+                }
+                else
+                {
+                    NavigationService.GoBack();
+                }
             }
         }
 
@@ -74,16 +105,19 @@ namespace NFCTalk
         {
             base.OnNavigatingFrom(e);
 
-            _dataContext.Communication.ConnectionInterrupted -= ConnectionInterrupted;
-            _dataContext.Communication.MessageReceived -= MessageReceived;
-
-            _dataContext.Messages.CollectionChanged -= MessagesChanged;
-
-            _dataContext.Communication.Disconnect();
-
-            foreach (Message m in _dataContext.Messages)
+            if (!App.PhotoActivity)
             {
-                m.Archived = true;
+                _dataContext.Communication.ConnectionInterrupted -= ConnectionInterrupted;
+                _dataContext.Communication.MessageReceived -= MessageReceived;
+
+                _dataContext.Messages.CollectionChanged -= MessagesChanged;
+
+                _dataContext.Communication.Disconnect();
+
+                foreach (Message m in _dataContext.Messages)
+                {
+                    m.Archived = true;
+                }
             }
         }
 
@@ -107,8 +141,10 @@ namespace NFCTalk
         /// <param name="m"></param>
         private void MessageReceived(Message m)
         {
-            Deployment.Current.Dispatcher.BeginInvoke(() =>
+            Deployment.Current.Dispatcher.BeginInvoke(async () =>
             {
+                await m.SaveByteArrayImageToFileSystemAsync();
+
                 _dataContext.Messages.Add(m);
             });
         }
@@ -132,7 +168,7 @@ namespace NFCTalk
         /// New outbound message is constructed using the configured chat name and
         /// chat message from the message input field. Message is send to the other device.
         /// </summary>
-        private async void sendButton_Click(object sender, RoutedEventArgs e)
+        private async void sendButton_Click(object sender, EventArgs e)
         {
             Message m = new Message()
             {
@@ -141,7 +177,19 @@ namespace NFCTalk
                 Direction = Message.DirectionValue.Out
             };
 
+            // If we are transferring an image, load it into the message from the temporary image file
+            if (m_ImageReadyToTransfer)
+            {
+                m.ImageName = string.Format("{0}.jpg", Guid.NewGuid()); // assign a unique image name
+                await m.ConvertImageToByteArrayAsync(m_TempImageName); // load up the temporary image into the message's byte array
+                await m.SaveByteArrayImageToFileSystemAsync(false); // save a local copy of the image, and do not clean up the byte array
+            }
+
+            // Clean up input values
             messageInput.Text = "";
+            messageImage.Source = null;
+            messageImage.Visibility = System.Windows.Visibility.Collapsed;
+            m_ImageReadyToTransfer = false;
 
             _dataContext.Messages.Add(m);
 
@@ -157,7 +205,65 @@ namespace NFCTalk
         /// </summary>
         private void messageInput_TextChanged(object sender, TextChangedEventArgs e)
         {
-            sendButton.IsEnabled = messageInput.Text.Length > 0;
+            sendButton.IsEnabled = (m_ImageReadyToTransfer || messageInput.Text.Length > 0);
         }
+
+        private void addImageButton_Click(object sender, EventArgs e)
+        {
+            App.PhotoActivity = true;
+            m_PhotoChooserTask.Show();
+        }
+
+        private async void PhotoChooserTask_Completed(object sender, PhotoResult e)
+        {
+            if (e.TaskResult == TaskResult.OK)
+            {
+                StorageFolder localFolder;
+                StorageFolder pictureFolder;
+                StorageFile tempFile;
+                BitmapImage bi;
+                WriteableBitmap wb;
+
+                try
+                {
+                    // 1) Assign the selected image to the messageImage control
+                    bi = new BitmapImage();
+                    bi.SetSource(e.ChosenPhoto);
+                    messageImage.Source = bi;
+                    messageImage.Visibility = System.Windows.Visibility.Visible;
+
+                    // 2) Write it to local storage
+                    localFolder = Windows.Storage.ApplicationData.Current.LocalFolder;
+                    pictureFolder = await localFolder.CreateFolderAsync(Message.PICTURES_FOLDER, CreationCollisionOption.OpenIfExists);
+                    tempFile = await pictureFolder.CreateFileAsync(m_TempImageName, Windows.Storage.CreationCollisionOption.ReplaceExisting);
+                    using (var wfs = await tempFile.OpenStreamForWriteAsync())
+                    {
+                        e.ChosenPhoto.Seek(0, SeekOrigin.Begin);
+                        await e.ChosenPhoto.CopyToAsync(wfs);
+                    }
+                    m_ImageReadyToTransfer = true;
+                    sendButton.IsEnabled = (m_ImageReadyToTransfer || messageInput.Text.Length > 0);
+
+                    System.Diagnostics.Debug.WriteLine(string.Concat("Successfully saved the image: ", tempFile.Path));
+                }
+                catch (Exception ex)
+                {
+                    System.Diagnostics.Debug.WriteLine(string.Concat("Failed to save the image >>> ", ex));
+                }
+                finally
+                {
+                    wb = null;
+                    bi = null;
+                    tempFile = null;
+                    pictureFolder = null;
+                    localFolder = null;
+                    GC.Collect();
+                }
+            }
+
+            App.PhotoActivity = false;
+        }
+
+
     }
 }
